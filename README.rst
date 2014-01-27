@@ -2,7 +2,7 @@
 Spoke
 =====
 
-Spoke attempts to provide a framework for building reusable front-end components.
+Spoke provides a framework for building reusable front-end components.
 
 Installing
 ==========
@@ -121,7 +121,7 @@ Now that we've defined this spoke, here's how we would call spokec to generate i
 
 ::
 
-    spokec username [add'l spokes] path/to/output.js
+    spokec username [add'l spokes] -o path/to/output.js
 
 Each invocation of spokec generates a single executable javascript file containing all of the specified spokes and their dependencies. So typically a service will create a single spoke file for all of its pages, or sometimes a few different spoke files if the pages that service provides are significantly different.
 
