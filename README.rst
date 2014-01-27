@@ -2,7 +2,7 @@
 Spoke
 =====
 
-Spoke attempt to provide a framework for building reusable front-end components.
+Spoke attempts to provide a framework for building reusable front-end components.
 
 Installing
 ==========
