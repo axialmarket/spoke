@@ -158,21 +158,20 @@ def spokify(spokes_def, spoke, out, path=SPOKE_PATH):
 def _spokify(js, css, html, out, path):
     '''Write js, css and HTML to outfile'''
     for c in css:
-        out.write('''$("<style type='text/css'>")'''\
-                  '.appendTo("head").text(decodeURIComponent("')
+        out.write('''$("<style type='text/css'>").appendTo("head").text(decodeURIComponent("''')
         _encoded_write(c, out, 'css', path)
         out.write('"));\n')
 
     for h in html:
-        out.write('''$("<div style='display: none'>")'''\
-                  '.appendTo("body").html(decodeURIComponent("')
+        out.write('''$("<div style='display: none'>").appendTo("body").html(decodeURIComponent("''')
         _encoded_write(h, out, 'html', path)
-        out.write('"));\n');
+        out.write('"));\n')
 
     for j in js:
         with _path_open(j, 'js', path, 'r') as js_file:
             for line in js_file:
                 out.write(line)
+        out.write(';')
 
 def _encoded_write(in_, out, typ, path):
     '''Read, encode and write line-wise from in to out'''
