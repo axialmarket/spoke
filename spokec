@@ -1,0 +1,303 @@
+#!/usr/bin/python
+"""spokec [flags] spoke [spoke [...]] [-spoke [-spoke]]
+spokec [-h|--help] [-c config|--config=file] [-p path|--path=path]
+       [-o output|--output=file] spoke [spoke [...]] [-spoke [...]]
+
+Usage:
+
+    Generates the specified spoke(s) to standard output (or to a file
+    specified with the -o option). For example:
+
+        spokec header footer profile > profile_page.js
+
+    Would generate the spokes for 'header', 'footer' and 'profile'. Spokes
+    that might be pulled in as dependencies may be excluded by passing the
+    spoke name prefixed with a '-'. For example:
+
+        spokec header footer profile -backbone -underscore
+
+    Would generate the same spoke as above, less the backbone and underscore
+    spokes.
+
+Options:
+
+    -h, --help
+        Print a usage to stdout and exit.
+
+    -c config, --config=file
+        Path to config file. This argument will override the SPOKE_CONFIG
+        environment variable.
+
+        default: /etc/spoke.cfg
+
+    -o output, --output=file
+        Path to output file. If specified, spokec will generate a temporary
+        file named <file>.tmp which it will write to, before atomically
+        installing the spoke to <file> using the rename(2) system call.
+
+    -p path, --path=path
+        ':' delimited list of directories used to look up spokes. This
+        argument will override the SPOKE_PATH environment variable.
+
+        default: /var/spoke/
+
+Environment:
+
+    SPOKE_PATH
+        Override the spoke path (same as -p path). If set, this environment
+        variable will override `path` set in the SPOKE_CONFIG file.
+
+    SPOKE_CONFIG
+        Override the path to the spoke config (same as -c config)
+
+Config:
+
+    Spokes are defined by a configuration file (default: /etc/spoke.cfg)
+    conforming to the following convention:
+
+        # the spoke program config section
+        [spoke]
+        path    = '/var/spoke/'
+        include = '/etc/spoke/*.cfg'
+
+        # configuration for a specific spoke
+        [a_spoke]
+        js     = 'a_spoke.js'
+        css    = ['main.css', 'grid.css']
+        html   = ['a_spoke.html.tpl']
+        spokes = 'backbone'
+
+        [backbone]
+        js     = 'backbone.js'
+
+    The default configuration file can be overridden by using the -c option
+
+    Copyright (c) 2013-2014, Axial Networks, Inc. All Rights Reserved.
+"""
+import sys
+import getopt
+import os
+import glob
+import urllib2
+import ast
+import errno
+from ConfigParser import ConfigParser
+
+############# CONFIG
+SPOKE_CONFIG = '/etc/spoke.cfg'
+SPOKE_PATH = '/var/spokes/'
+SPOKE_ITERABLES = ( 'js', 'html', 'css', 'spokes', )
+
+
+############# CLI BOILERPLATE
+def shout(msg, f=sys.stderr):
+    '''Log to file (usually stderr), with progname: <log>'''
+    print >> f, 'spokec: {}'.format(msg)
+
+class Fatal(Exception):
+    '''Cause abnormal termination with a message'''
+    def __init__(self, msg, exit=111):
+        shout(msg)
+        self.message = msg
+        self.exit = exit
+
+class Usage(Exception):
+    '''Terminate with short/long usage to stdout or stderr'''
+    def __init__(self, asked_for=0):
+        if asked_for:
+            shout(__doc__, f=sys.stdout)
+            self.exit = 0
+        else:
+            shout('usage: {}'.format(__doc__.split('\n')[0]),
+                  f=sys.stderr)
+        self.exit = 0 if asked_for else 100
+
+def cfg2obj(*cfg_paths):
+    '''Convert a ConfigParser cfg file to a python object.
+
+       As Flask seems to lack ConfigParser support, and ConfigParser is much
+       easier to read and write, we need to give it a helping hand.
+
+       NB: For ease of typing, and extension, values are interpretted as
+           python literals using ast.literal_eval
+    '''
+    config = {}
+    for cfg_path in cfg_paths:
+        parser = ConfigParser()
+        parser.read(cfg_path)
+        # each section is a key in config dict
+        for section in parser.sections():
+            section = section.lower()
+            sect_config = config.setdefault(section, {})
+            for name,val in parser.items(section):
+                # evaluate value as a python expression and store
+                val = ast.literal_eval(val)
+                # recurse if includes is defined in 'spoke' section
+                if section == 'spoke' and name == 'include':
+                    val = [val] if isinstance(val, basestring) else val
+                    for glob_include in val:
+                        # iterate the includes in alpha-order
+                        includes = glob.glob(glob_include)
+                        if includes:
+                            includes.sort()
+                            config.update(cfg2obj(*includes))
+                else:
+                    # turn strings into iterables
+                    if name in SPOKE_ITERABLES:
+                        val = [val] if isinstance(val, basestring) else val
+                    sect_config[name] = val
+
+    return config
+
+def spokify(spokes_def, spoke, out, path=SPOKE_PATH):
+    """ Compile the specified spoke, appending to the out file. """
+    args = { 'js': [], 'css': [], 'html': [], }
+    args.update(spokes_def[spoke])
+    _spokify(args['js'], args['css'], args['html'], out, path)
+
+def _spokify(js, css, html, out, path):
+    '''Write js, css and HTML to outfile'''
+    for c in css:
+        out.write('''$("<style type='text/css'>")'''\
+                  '.appendTo("head").text(decodeURIComponent("')
+        _encoded_write(c, out, 'css', path)
+        out.write('"));\n')
+
+    for h in html:
+        out.write('''$("<div style='display: none'>")'''\
+                  '.appendTo("body").html(decodeURIComponent("')
+        _encoded_write(h, out, 'html', path)
+        out.write('"));\n');
+
+    for j in js:
+        with _path_open(j, 'js', path, 'r') as js_file:
+            for line in js_file:
+                out.write(line)
+
+def _encoded_write(in_, out, typ, path):
+    '''Read, encode and write line-wise from in to out'''
+    with _path_open(in_, typ, path, 'r') as in_file:
+        for line in in_file:
+            out.write(urllib2.quote(line))
+
+def _path_open(file_name, typ, paths, mode):
+    '''Resolve a file_name to a path'''
+    try:
+        return open(file_name, mode)
+    except (OSError, IOError), e:
+        # if it failed for any other reason than it doesn't exist, or if the
+        # path is qualified in any way, re-raise
+        #TODO: make this work with windows file-systems
+        if e.errno != errno.ENOENT or file_name.startswith('./') or \
+                file_name.startswith('../') or file_name.startswith('/'):
+            raise
+
+    # fall back to a path search -- prepending ./
+    local_paths = ['./'] + paths
+    for path in paths:
+        try:
+            return open(os.path.join(path, typ, file_name), mode)
+        except (OSError, IOError), e:
+            if e.errno != errno.ENOENT:
+                raise
+
+    # if we haven't returned yet, we didn't find it
+    raise OSError(errno.ENOENT, os.strerror(errno.ENOENT), file_name)
+
+def expand_dependencies(spokes_def, spokes, seen):
+    """ Recursively obtains all the spokes that the supplied spokes depend on.
+        Returns the supplied spokes combined with their dependent spokes, in
+        order so that all dependent spokes occur after their dependencies. """
+    expanded = []
+    for spoke in spokes:
+        if spoke not in seen:
+            seen.add(spoke)
+            dependencies = spokes_def[spoke].get('spokes')
+            if dependencies:
+                expanded.extend(expand_dependencies(spokes_def, dependencies,
+                                                    seen))
+            expanded.append(spoke)
+    return expanded
+
+def main(args):
+    '''Arguments and options handling for program execution'''
+    config_file = os.environ.get('SPOKE_CONFIG', SPOKE_CONFIG)
+    out_file_name = out_file = None
+    spokes_path = None
+    try:
+        opts, args = getopt.getopt(args, 'hc:o:p:', (
+            'help', 'config=', 'output=', 'path=',
+        ))
+        for flag, opt in opts:
+            if flag in ('-c', '--config'):
+                config_file = opt
+            elif flag in ('-o', '--output'):
+                out_file_name = opt
+            elif flag in ('-p', '--path'):
+                spokes_path = opt
+            elif flag in ('-h', '--help'):
+                raise Usage(1)
+        if 1 > len(args):
+            raise Usage()
+
+        # process config(s)
+        spokes_def = cfg2obj(config_file)
+        cfg = spokes_def.pop('spoke', {})
+
+        # -p path > SPOKE_PATH > cfg['path']
+        if spokes_path is None:
+            spokes_path = os.environ.get('SPOKE_PATH',
+                                         cfg.get('path', SPOKE_PATH))
+        # path is ':' delimited
+        spokes_path = (spokes_path or '').split(':')
+
+        # handle positional args
+        seen = set()
+        compile_spokes = []
+        for arg in args:
+            arg = arg.lower()
+            if arg.startswith("-"):
+                seen.add(arg[1:])
+            else:
+                compile_spokes.append(arg)
+
+        try:
+            compile_spokes = expand_dependencies(spokes_def, compile_spokes, seen)
+        except KeyError, e:
+            raise Fatal("Could not find spoke: {}".format(e.message))
+
+        out_file = sys.stdout
+        if out_file_name is not None:
+            out_file = open('{}.tmp'.format(out_file_name), "w")
+
+        for spoke in compile_spokes:
+            try:
+                spokify(spokes_def, spoke, out_file, path=spokes_path)
+            except KeyError:
+                raise Fatal("Could not find spoke: {}".format(spoke))
+
+        # commit -- if -o was specified
+        if out_file_name is not None:
+            os.rename(out_file.name, out_file_name)
+
+    except (OSError, IOError), e:
+        shout('{0}{1}{2}'.format(e.strerror,
+                                 ': ' if e.filename is not None else '',
+                                 e.filename or ''))
+        return 111
+    except getopt.GetoptError, e:
+        shout('invalid flag: -{0}{1}'.format('-' if 1 < len(e.opt) else '',
+              e.opt))
+        return 100
+    except (Fatal, Usage), e:
+        return e.exit
+    finally:
+        if out_file and out_file != sys.stdout:
+            out_file.close()
+
+    # success
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
