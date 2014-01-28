@@ -1,3 +1,5 @@
 [.]*.sw[m-z]
 build
+dist
+MANIFEST
 *.pyc
