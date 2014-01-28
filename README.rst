@@ -39,9 +39,9 @@ A simple example
 
 Let's create a spoke for rendering a user's name. This perhaps sounds like it's too simple a task, but there could be some complexity to the logic required:
 
-* To save space, if the user's full name would be more than 20 characters, we will render just their first initial followed by their last name.
-* If the user is an internal user, we want to annotate their name with (internal).
-* If the user is an internal user masquerading as a regular user, we want to annotate their name with (masq).
+- To save space, if the user's full name would be more than 20 characters, we will render just their first initial followed by their last name.
+- If the user is an internal user, we want to annotate their name with (internal).
+- If the user is an internal user masquerading as a regular user, we want to annotate their name with (masq).
 
 For this example, we will use a Backbone model and view, and an Underscore template, but these are implementation choices and not imposed on us just because we are creating a spoke.
 
@@ -137,7 +137,7 @@ License
 
 BSD 3-Clause, see LICENSE.txt_.
 
-.. _LICENSE.txt: ./LICENSE.txt
+.. _LICENSE.txt: https://github.com/axialmarket/spoke/LICENSE.txt
 
 Authors
 =======
