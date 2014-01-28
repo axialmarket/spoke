@@ -10,7 +10,7 @@ Installing
 The spoke project lives on github_, and is available via pip_.
 
 .. _github: https://github.com/axialmarket/spoke
-.. _pip: https://pypi.python.org/pypi?:action=display&name=spoke
+.. _pip: https://pypi.python.org/pypi/spoke/0.1
 
 Installing v0.1 From Pip
 ------------------------
