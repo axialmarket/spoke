@@ -81,6 +81,7 @@ import glob
 import urllib2
 import ast
 import errno
+import betterconfig
 from ConfigParser import ConfigParser
 
 ############# CONFIG
@@ -111,43 +112,6 @@ class Usage(Exception):
             shout('usage: {}'.format(__doc__.split('\n')[0]),
                   f=sys.stderr)
         self.exit = 0 if asked_for else 100
-
-def cfg2obj(*cfg_paths):
-    '''Convert a ConfigParser cfg file to a python object.
-
-       As Flask seems to lack ConfigParser support, and ConfigParser is much
-       easier to read and write, we need to give it a helping hand.
-
-       NB: For ease of typing, and extension, values are interpretted as
-           python literals using ast.literal_eval
-    '''
-    config = {}
-    for cfg_path in cfg_paths:
-        parser = ConfigParser()
-        parser.read(cfg_path)
-        # each section is a key in config dict
-        for section in parser.sections():
-            section = section.lower()
-            sect_config = config.setdefault(section, {})
-            for name,val in parser.items(section):
-                # evaluate value as a python expression and store
-                val = ast.literal_eval(val)
-                # recurse if includes is defined in 'spoke' section
-                if section == 'spoke' and name == 'include':
-                    val = [val] if isinstance(val, basestring) else val
-                    for glob_include in val:
-                        # iterate the includes in alpha-order
-                        includes = glob.glob(glob_include)
-                        if includes:
-                            includes.sort()
-                            config.update(cfg2obj(*includes))
-                else:
-                    # turn strings into iterables
-                    if name in SPOKE_ITERABLES:
-                        val = [val] if isinstance(val, basestring) else val
-                    sect_config[name] = val
-
-    return config
 
 def spokify(spokes_def, spoke, out, path=SPOKE_PATH):
     """ Compile the specified spoke, appending to the out file. """
@@ -240,7 +204,7 @@ def main(args):
             raise Usage()
 
         # process config(s)
-        spokes_def = cfg2obj(config_file)
+        spokes_def = betterconfig.load(config_file)
         cfg = spokes_def.pop('spoke', {})
 
         # -p path > SPOKE_PATH > cfg['path']
