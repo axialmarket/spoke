@@ -1,0 +1,114 @@
+#!/usr/bin/python
+"""
+    Usage:
+
+        spokec SPOKE[, SPOKE, ...] [-SPOKE, ...] OUTPUT_FILE
+
+            Generates the specified spoke(s) into the specified output file. Spokes that might
+            be pulled in as dependencies but are already included elsewhere can be excluded by
+            passing the spoke name prefixed with a '-'.
+
+            E.g.:
+
+                spokec header -node-compat static/spokes/header.spoke.js
+
+    Copyright (c) 2013-2014, Axial Networks, Inc. All Rights Reserved.
+"""
+
+import sys
+import os
+import urllib2
+
+PATH = os.path.abspath(os.path.dirname(sys.argv[0]))
+
+SPOKES = {
+    'underscore': { 'js':     [ 'underscore.js' ] },
+    'backbone':   { 'js':     [ 'backbone.js' ],
+                    'spokes': [ 'underscore' ] },
+    'username':   { 'js':     [ 'models/Username.js', 'views/Username.js' ],
+                    'html':   [ 'username.html.tpl' ],
+                    'css':    [ 'username.css' ],
+                    'spokes': [ 'backbone' ] },
+}
+
+def spokify(spoke, out):
+    """ Compile the specified spoke, appending to the out file. """
+    if spoke in SPOKES:
+        args = {}
+        for typ in ['js', 'css', 'html']:
+            args[typ] = []
+            for f in SPOKES[spoke].get(typ, []):
+                args[typ].append(os.path.join(PATH, typ, f))
+        return _spokify(args['js'], args['css'], args['html'], out)
+    else:
+        return 1
+
+def _spokify(js, css, html, out):
+    for c in css:
+        encoded = urllib2.quote(open(c).read())
+        print >>out, '$("<style type=' + "'text/css'" + '>").appendTo("head").text(decodeURIComponent("' + encoded + '"));' + "\n"
+
+    for h in html:
+        encoded = urllib2.quote(open(h).read())
+        print >>out, '$("<div style=' + "'display: none'" + '>").appendTo("body").html(decodeURIComponent("' + encoded + '"));' + "\n"
+
+    for j in js:
+        print >>out, open(j).read() + ";\n"
+
+    return 0
+
+def expand_dependencies(spokes, seen):
+    """ Recursively obtains all the spokes that the supplied spokes depend on.
+        Returns the supplied spokes combined with their dependent spokes, in
+        order so that all dependent spokes occur after their dependencies. """
+    expanded = []
+    for spoke in spokes:
+        if not seen.get(spoke):
+            seen[spoke] = True
+            dependencies = SPOKES[spoke].get('spokes')
+            if dependencies:
+                expanded.extend(expand_dependencies(dependencies, seen))
+            expanded.append(spoke)
+    return expanded
+
+class Usage(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    if len(argv) < 3:
+        raise Usage("Expected at least 2 arguments, received " + len(argv))
+
+    output_file = argv.pop()
+    temp_output_file = u'{}.tmp'.format(output_file)
+    if os.path.exists(temp_output_file):
+        os.remove(temp_output_file)
+    failed = False
+
+    seen = {}
+    args = []
+    for arg in argv[1:]:
+        if arg[0] == "-":
+            seen[arg[1:]] = True
+        else:
+            args.append(arg)
+
+    spokes = expand_dependencies(args, seen)
+
+    out = open(temp_output_file, "a+")
+    for spoke in spokes:
+        if spokify(spoke, out):
+            print >>sys.stderr, "Could not generate spoke '{}'.".format(spoke)
+            failed = True
+
+    if failed:
+        return 1
+    else:
+        os.rename(temp_output_file, output_file)
+        return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
