@@ -110,6 +110,11 @@ class Usage(Exception):
                   f=sys.stderr)
         self.exit = 0 if asked_for else 100
 
+def _list_coerce(val):
+    if isinstance(val, basestring):
+        return [val]
+    return val
+
 def spokify(spokes_def, spoke, out, path=SPOKE_PATH):
     """ Compile the specified spoke, appending to the out file. """
     args = { 'js': [], 'css': [], 'html': [], }
@@ -118,14 +123,8 @@ def spokify(spokes_def, spoke, out, path=SPOKE_PATH):
 
 def _spokify(js, css, html, out, path):
     '''Write js, css and HTML to outfile'''
-    if isinstance(js, basestring):
-        js = [js]
-    if isinstance(css, basestring):
-        css = [css]
-    if isinstance(html, basestring):
-        html = [html]
 
-    for c in css:
+    for c in _list_coerce(css):
         out.write('''(function(){
             var $spokeCSS = $("style[data-spoke=css]"),
                 spokeCSS;
@@ -139,12 +138,12 @@ def _spokify(js, css, html, out, path):
         _encoded_write(c, out, 'css', path)
         out.write('")));\n})();\n')
 
-    for h in html:
+    for h in _list_coerce(html):
         out.write('''$("<div style='display: none'>").appendTo("body").html(decodeURIComponent("''')
         _encoded_write(h, out, 'html', path)
         out.write('"));\n')
 
-    for j in js:
+    for j in _list_coerce(js):
         with _path_open(j, 'js', path, 'r') as js_file:
             for line in js_file:
                 out.write(line)
@@ -184,10 +183,7 @@ def expand_dependencies(spokes_def, spokes, seen):
         order so that all dependent spokes occur after their dependencies. """
     expanded = []
 
-    if isinstance(spokes, basestring):
-        spokes = [spokes]
-
-    for spoke in spokes:
+    for spoke in _list_coerce(spokes):
         if spoke not in seen:
             seen.add(spoke)
             dependencies = spokes_def[spoke].get('spokes')
