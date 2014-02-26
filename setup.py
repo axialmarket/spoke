@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='spoke',
-    version='0.2',
+    version='0.3',
     author='Ben Holzman',
     author_email='ben.holzman@axial.net',
     scripts=['spokec'],

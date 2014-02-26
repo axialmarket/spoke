@@ -77,12 +77,9 @@ Config:
 import sys
 import getopt
 import os
-import glob
 import urllib2
-import ast
 import errno
 import betterconfig
-from ConfigParser import ConfigParser
 
 ############# CONFIG
 SPOKE_CONFIG = '/etc/spoke.cfg'
@@ -113,6 +110,11 @@ class Usage(Exception):
                   f=sys.stderr)
         self.exit = 0 if asked_for else 100
 
+def _list_coerce(val):
+    if isinstance(val, basestring):
+        return [val]
+    return val
+
 def spokify(spokes_def, spoke, out, path=SPOKE_PATH):
     """ Compile the specified spoke, appending to the out file. """
     args = { 'js': [], 'css': [], 'html': [], }
@@ -121,17 +123,27 @@ def spokify(spokes_def, spoke, out, path=SPOKE_PATH):
 
 def _spokify(js, css, html, out, path):
     '''Write js, css and HTML to outfile'''
-    for c in css:
-        out.write('''$("<style type='text/css'>").appendTo("head").text(decodeURIComponent("''')
-        _encoded_write(c, out, 'css', path)
-        out.write('"));\n')
 
-    for h in html:
+    for c in _list_coerce(css):
+        out.write('''(function(){
+            var $spokeCSS = $("style[data-spoke=css]"),
+                spokeCSS;
+            if ($spokeCSS.length) {
+                spokeCSS = $spokeCSS[0];
+            } else {
+                $spokeCSS = $("<style data-spoke='css' type='text/css'>").appendTo($("head"));
+                spokeCSS = $spokeCSS[0];
+            }
+            spokeCSS.appendChild(document.createTextNode(decodeURIComponent("''')
+        _encoded_write(c, out, 'css', path)
+        out.write('")));\n})();\n')
+
+    for h in _list_coerce(html):
         out.write('''$("<div style='display: none'>").appendTo("body").html(decodeURIComponent("''')
         _encoded_write(h, out, 'html', path)
         out.write('"));\n')
 
-    for j in js:
+    for j in _list_coerce(js):
         with _path_open(j, 'js', path, 'r') as js_file:
             for line in js_file:
                 out.write(line)
@@ -155,8 +167,6 @@ def _path_open(file_name, typ, paths, mode):
                 file_name.startswith('../') or file_name.startswith('/'):
             raise
 
-    # fall back to a path search -- prepending ./
-    local_paths = ['./'] + paths
     for path in paths:
         try:
             return open(os.path.join(path, typ, file_name), mode)
@@ -172,7 +182,8 @@ def expand_dependencies(spokes_def, spokes, seen):
         Returns the supplied spokes combined with their dependent spokes, in
         order so that all dependent spokes occur after their dependencies. """
     expanded = []
-    for spoke in spokes:
+
+    for spoke in _list_coerce(spokes):
         if spoke not in seen:
             seen.add(spoke)
             dependencies = spokes_def[spoke].get('spokes')

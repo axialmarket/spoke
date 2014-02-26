@@ -1,5 +1,9 @@
-Changlog
-========
+Changelog
+=========
+
+version 0.3
+-----------
+| reuse the same <style> tag for each CSS file, to avoid hitting IE limit
 
 version 0.2
 -----------
