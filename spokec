@@ -229,7 +229,6 @@ def main(args):
         seen = set()
         compile_spokes = []
         for arg in args:
-            arg = arg.lower()
             if arg.startswith("-"):
                 seen.add(arg[1:])
             else:
