@@ -10,21 +10,21 @@ Installing
 The spoke project lives on github_, and is available via pip_.
 
 .. _github: https://github.com/axialmarket/spoke
-.. _pip: https://pypi.python.org/pypi/spoke/0.2
+.. _pip: https://pypi.python.org/pypi/spoke/0.4
 
-Installing v0.3 From Pip
+Installing v0.4 From Pip
 ------------------------
 
 ::
 
-    sudo pip install spoke==0.3
+    sudo pip install spoke==0.4
 
-Installing v0.3 From Source
+Installing v0.4 From Source
 ---------------------------
 
 ::
 
-    curl https://github.com/axialmarket/spoke/archive/version_0.3.tar.gz | tar vzxf -
+    curl https://github.com/axialmarket/spoke/archive/version_0.4.tar.gz | tar vzxf -
     cd spoke
     sudo python setup.py install
 

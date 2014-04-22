@@ -65,6 +65,7 @@ Config:
         js     = 'a_spoke.js'
         css    = ['main.css', 'grid.css']
         html   = ['a_spoke.html.tpl']
+        extjs  = 'program --that --generates --js'
         spokes = 'backbone'
 
         [backbone]
@@ -79,12 +80,13 @@ import getopt
 import os
 import urllib2
 import errno
+import shlex
+import subprocess
 import betterconfig
 
 ############# CONFIG
 SPOKE_CONFIG = '/etc/spoke.cfg'
 SPOKE_PATH = '/var/spokes/'
-SPOKE_ITERABLES = ( 'js', 'html', 'css', 'spokes', )
 
 
 ############# CLI BOILERPLATE
@@ -117,11 +119,11 @@ def _list_coerce(val):
 
 def spokify(spokes_def, spoke, out, path=SPOKE_PATH):
     """ Compile the specified spoke, appending to the out file. """
-    args = { 'js': [], 'css': [], 'html': [], }
+    args = { 'js': [], 'extjs': [], 'css': [], 'html': [], }
     args.update(spokes_def[spoke])
-    _spokify(args['js'], args['css'], args['html'], out, path)
+    _spokify(args['js'], args['extjs'], args['css'], args['html'], out, path)
 
-def _spokify(js, css, html, out, path):
+def _spokify(js, extjs, css, html, out, path):
     '''Write js, css and HTML to outfile'''
 
     for c in _list_coerce(css):
@@ -142,6 +144,13 @@ def _spokify(js, css, html, out, path):
         out.write('''$("<div style='display: none'>").appendTo("body").html(decodeURIComponent("''')
         _encoded_write(h, out, 'html', path)
         out.write('"));\n')
+
+    out.flush()
+
+    for j in _list_coerce(extjs):
+        subprocess.call(shlex.split(j), stdout=out)
+        out.flush()
+        out.write(';')
 
     for j in _list_coerce(js):
         with _path_open(j, 'js', path, 'r') as js_file:
