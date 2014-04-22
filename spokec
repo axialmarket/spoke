@@ -147,8 +147,12 @@ def _spokify(js, extjs, css, html, out, path):
 
     out.flush()
 
+    devnull = None
+
     for j in _list_coerce(extjs):
-        subprocess.call(shlex.split(j), stdout=out)
+        if devnull is None:
+            devnull = open(os.devnull, 'r')
+        subprocess.call(shlex.split(j), stdout=out, stdin=devnull)
         out.flush()
         out.write(';')
 
