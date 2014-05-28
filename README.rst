@@ -1,5 +1,6 @@
 =====
-Spoke
+.. image:: img/spoke.png
+   :alt: Spoke
 =====
 
 Spoke provides a framework for building reusable front-end components.
