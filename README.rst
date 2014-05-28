@@ -2,9 +2,7 @@
 |Spoke|
 =====
 
-.. |Spoke| image:: img/spoke-full.png
-    :height: 75px
-    :alt: Spoke
+.. |Spoke| image:: img/spoke-full-100.png
 
 Spoke provides a framework for building reusable front-end components.
 
